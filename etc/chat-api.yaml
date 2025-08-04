@@ -3,7 +3,7 @@ Host: 0.0.0.0
 Port: 8888
 
 # Model endpoints configuration
-LLMEndpoint: "https://zgsm.sangfor.com/v1/chat/completions"
+LLMEndpoint: "http://127.0.0.1:30616/chat-rag/api/v1/chat/completions"
 
 # Token processing configuration
 TokenThreshold: 5_000
@@ -26,6 +26,8 @@ ClassifyModel: "deepseek-v3"
 # Split system prompt, used to compress system prompt
 SystemPromptSplitStr: "====\n\nRULES"
 
+# User prompt configuration
+NeedCompressUserPrompt: true
 # used recent user prompt messages nums
 RecentUserMsgUsedNums: 3
 

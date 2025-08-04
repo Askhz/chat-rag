@@ -8,6 +8,7 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
+	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/promptflow/ds"
 	"github.com/zgsm-ai/chat-rag/internal/promptflow/processor"
@@ -110,6 +111,11 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 	// p.systemCompressor.SetNext(p.semanticSearch)
 	p.semanticSearch.SetNext(p.userCompressor)
 	p.userCompressor.SetNext(p.end)
+
+	if !p.config.NeedCompressUserPrompt {
+		logger.Info("User prompt compression is disabled.")
+		p.semanticSearch.SetNext(p.end)
+	}
 
 	return nil
 }

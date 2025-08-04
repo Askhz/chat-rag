@@ -30,6 +30,8 @@ type Config struct {
 	// Split system prompt
 	SystemPromptSplitStr string
 
+	// User prompt configuration
+	NeedCompressUserPrompt bool
 	// used recent user prompt messages nums
 	RecentUserMsgUsedNums int
 

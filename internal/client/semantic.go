@@ -101,8 +101,8 @@ func (c *SemanticClient) Search(ctx context.Context, req SemanticRequest) (*Sema
 			respBody = string(body)
 		}
 		return nil, fmt.Errorf(
-			"semantic search failed! status: %d, response:%s, url: %s",
-			resp.StatusCode, respBody, u.String(),
+			"semantic search failed! status: %d, response:%s",
+			resp.StatusCode, respBody,
 		)
 	}
 
