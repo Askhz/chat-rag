@@ -27,7 +27,7 @@ ClassifyModel: "deepseek-v3"
 SystemPromptSplitStr: "====\n\nRULES"
 
 # User prompt configuration
-NeedCompressUserPrompt: true
+NeedCompressUserPrompt: false
 # used recent user prompt messages nums
 RecentUserMsgUsedNums: 3
 
