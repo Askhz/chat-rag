@@ -5,6 +5,7 @@ import (
 
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/model"
+	"github.com/zgsm-ai/chat-rag/internal/types"
 	"go.uber.org/zap"
 )
 
@@ -13,6 +14,12 @@ const (
 	ToolDescStartPattern = "====\n\nTOOL USE"
 	// ToolDescEndPattern defines the end pattern for tool description
 	ToolDescEndPattern = "\n\n====\n\nCAPABILITIES"
+	// ApplyDiffErrorMessage defines the error message for apply_diff parsing failure
+	ApplyDiffErrorMessage = "Failed to parse apply_diff XML"
+	// ApplyDiffSectionPattern defines the start pattern for apply_diff section
+	ApplyDiffSectionPattern = "## apply_diff"
+	// ApplyDiffNextSectionPattern defines the pattern for the next section
+	ApplyDiffNextSectionPattern = "\n## "
 )
 
 // ToolDescriptionExtractor extracts tool descriptions from system message
@@ -30,7 +37,6 @@ func NewToolDescriptionExtractor() *ToolDescriptionExtractor {
 func (t *ToolDescriptionExtractor) Execute(promptMsg *PromptMsg) {
 	logger.Info("Executing ToolDescriptionExtractor")
 
-	// Extract system content
 	systemContent, err := t.extractSystemContent(promptMsg.GetSystemMsg())
 	if err != nil {
 		logger.Error("Failed to extract system content", zap.Error(err))
@@ -38,7 +44,6 @@ func (t *ToolDescriptionExtractor) Execute(promptMsg *PromptMsg) {
 		return
 	}
 
-	// Find tool description bounds in system content
 	startIndex, endIndex := t.findToolDescriptionBounds(systemContent)
 	if startIndex == -1 || endIndex == -1 {
 		logger.Info("No tool description found in system message")
@@ -46,15 +51,10 @@ func (t *ToolDescriptionExtractor) Execute(promptMsg *PromptMsg) {
 		return
 	}
 
-	// Extract the tool description
 	toolDescription := systemContent[startIndex:endIndex]
-	logger.Info("Tool description extracted",
-		zap.Int("length", len(toolDescription)))
 
-	// Remove tool description from system message
 	newSystemContent := systemContent[:startIndex] + systemContent[endIndex:]
 
-	// Add tool description to user message
 	err = t.addToolDescriptionToUserMessage(promptMsg, toolDescription)
 	if err != nil {
 		logger.Error("Failed to add tool description to user message", zap.Error(err))
@@ -62,63 +62,111 @@ func (t *ToolDescriptionExtractor) Execute(promptMsg *PromptMsg) {
 		return
 	}
 
-	// Update system message only after successfully adding to user message
-	// This ensures atomicity - either both operations succeed or neither does
 	promptMsg.UpdateSystemMsg(newSystemContent)
-
 	t.passToNext(promptMsg)
 }
 
-// addToolDescriptionToUserMessage adds tool description to the user message
+// addToolDescriptionToUserMessage adds appropriate content to the user message
+// based on whether apply_diff error is detected
 func (t *ToolDescriptionExtractor) addToolDescriptionToUserMessage(promptMsg *PromptMsg, toolDescription string) error {
-	// Get the last user message
 	if promptMsg.lastUserMsg == nil {
-		return nil // No user message to modify
+		return nil
 	}
 
-	// Use ExtractMsgContent to normalize content to []Content
-	var contentExtractor model.Content
-	contents, err := contentExtractor.ExtractMsgContent(promptMsg.lastUserMsg)
+	contents, err := t.extractMessageContents(promptMsg.lastUserMsg)
 	if err != nil {
 		return err
 	}
 
-	// Create tool description content with tags
+	if t.hasApplyDiffError(contents) {
+		contents = t.addApplyDiffUsage(contents, toolDescription)
+	} else {
+		contents = t.addToolDescription(contents, toolDescription)
+	}
+
+	promptMsg.lastUserMsg.Content = contents
+	return nil
+}
+
+// extractMessageContents extracts and normalizes message contents
+func (t *ToolDescriptionExtractor) extractMessageContents(message *types.Message) ([]model.Content, error) {
+	var contentExtractor model.Content
+	return contentExtractor.ExtractMsgContent(message)
+}
+
+// hasApplyDiffError checks if any content contains apply_diff parsing error
+func (t *ToolDescriptionExtractor) hasApplyDiffError(contents []model.Content) bool {
+	for _, content := range contents {
+		if strings.Contains(content.Text, ApplyDiffErrorMessage) {
+			return true
+		}
+	}
+	return false
+}
+
+// addApplyDiffUsage extracts and adds apply_diff usage to contents
+func (t *ToolDescriptionExtractor) addApplyDiffUsage(contents []model.Content, toolDescription string) []model.Content {
+	logger.Info("Detected apply_diff parsing error in user message, adding apply_diff usage")
+
+	applyDiffContent := t.extractApplyDiffSection(toolDescription)
+	if applyDiffContent == "" {
+		logger.Warn("Could not extract apply_diff section from tool description")
+		return contents
+	}
+
+	applyDiffUsageContent := model.Content{
+		Type:         model.ContTypeText,
+		Text:         "<apply_diff_usage>\n" + applyDiffContent + "</apply_diff_usage>",
+		CacheControl: model.EphemeralCacheControl,
+	}
+
+	contents = append(contents, applyDiffUsageContent)
+	logger.Info("Added apply_diff usage to user message due to parse error")
+	return contents
+}
+
+// extractApplyDiffSection extracts the apply_diff section from tool description
+func (t *ToolDescriptionExtractor) extractApplyDiffSection(toolDescription string) string {
+	startIndex := strings.Index(toolDescription, ApplyDiffSectionPattern)
+	if startIndex == -1 {
+		return ""
+	}
+
+	endIndex := strings.Index(toolDescription[startIndex:], ApplyDiffNextSectionPattern)
+	if endIndex == -1 {
+		return ""
+	}
+
+	endIndex += startIndex
+	return toolDescription[startIndex:endIndex]
+}
+
+// addToolDescription adds the complete tool description to contents
+func (t *ToolDescriptionExtractor) addToolDescription(contents []model.Content, toolDescription string) []model.Content {
 	toolDescContent := model.Content{
 		Type:         model.ContTypeText,
 		Text:         "<tool_description>\n" + toolDescription + "</tool_description>",
 		CacheControl: model.EphemeralCacheControl,
 	}
 
-	// Add tool description to the end of the content list
 	contents = append(contents, toolDescContent)
-
-	// Update the user message content
-	promptMsg.lastUserMsg.Content = contents
-
-	logger.Info("Added tool description to user message",
-		zap.Int("content_count", len(contents)))
-
-	return nil
+	logger.Info("Added tool_description content to user message", zap.Int("length", len(toolDescription)))
+	return contents
 }
 
 // findToolDescriptionBounds finds the start and end positions of tool description in system content
 // Returns start index and end index (exclusive), or -1, -1 if not found
 func (t *ToolDescriptionExtractor) findToolDescriptionBounds(systemContent string) (int, int) {
-	// Find the start position
 	startIndex := strings.Index(systemContent, ToolDescStartPattern)
 	if startIndex == -1 {
 		return -1, -1
 	}
 
-	// Find the end position after the start position (before ToolDescEndPattern)
 	endIndex := strings.Index(systemContent[startIndex:], ToolDescEndPattern)
 	if endIndex == -1 {
 		return -1, -1
 	}
 
-	// Calculate the actual end position in the original string (before ToolDescEndPattern)
 	endIndex += startIndex
-
 	return startIndex, endIndex
 }
