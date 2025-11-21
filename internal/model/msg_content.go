@@ -14,7 +14,14 @@ type ContentTextType string
 const (
 	// ContTypeText content type
 	ContTypeText ContentTextType = "text"
+	// CacheControlType defines the cache control type for content
+	CacheControlType = "ephemeral"
 )
+
+// EphemeralCacheControl defines the cache control for ephemeral content
+var EphemeralCacheControl = map[string]interface{}{
+	"type": CacheControlType,
+}
 
 type Content struct {
 	Type         ContentTextType `json:"type"`

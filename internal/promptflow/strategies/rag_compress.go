@@ -42,6 +42,7 @@ type RagCompressProcessor struct {
 
 	userMsgFilter        *processor.UserMsgFilter
 	taskContentProcessor *processor.TaskContentProcessor
+	toolDescExtractor    *processor.ToolDescriptionExtractor
 	xmlToolAdapter       *processor.XmlToolAdapter
 	start                *processor.Start
 	end                  *processor.End
@@ -154,6 +155,7 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 		p.agentName,
 		p.promptMode,
 	)
+	p.toolDescExtractor = processor.NewToolDescriptionExtractor()
 	p.xmlToolAdapter = processor.NewXmlToolAdapter(
 		p.ctx,
 		p.toolsExecutor,
@@ -173,7 +175,8 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 	p.userMsgFilter.SetNext(p.taskContentProcessor)
 	p.taskContentProcessor.SetNext(p.xmlToolAdapter)
 	// p.xmlToolAdapter.SetNext(p.userCompressor)
-	p.xmlToolAdapter.SetNext(p.end)
+	p.xmlToolAdapter.SetNext(p.toolDescExtractor)
+	p.toolDescExtractor.SetNext(p.end)
 
 	return nil
 }

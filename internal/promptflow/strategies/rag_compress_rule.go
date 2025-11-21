@@ -54,7 +54,7 @@ func (r *RagWithRuleProcessor) buildProcessorChain() error {
 
 	// Rebuild chain with rule injector inserted at the beginning
 	r.xmlToolAdapter.SetNext(r.ruleInjector)
-	r.ruleInjector.SetNext(r.end)
+	r.ruleInjector.SetNext(r.toolDescExtractor)
 	// The rest of the chain remains the same as in parent
 
 	return nil

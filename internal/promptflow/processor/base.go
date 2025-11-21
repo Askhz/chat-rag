@@ -50,11 +50,9 @@ func (p *PromptMsg) UpdateSystemMsg(content string) {
 		Role: types.RoleSystem,
 		Content: []model.Content{
 			{
-				Type: model.ContTypeText,
-				Text: content,
-				CacheControl: map[string]interface{}{
-					"type": "ephemeral",
-				},
+				Type:         model.ContTypeText,
+				Text:         content,
+				CacheControl: model.EphemeralCacheControl,
 			},
 		},
 	}
