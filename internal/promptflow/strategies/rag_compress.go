@@ -44,6 +44,7 @@ type RagCompressProcessor struct {
 	taskContentProcessor *processor.TaskContentProcessor
 	toolDescExtractor    *processor.ToolDescriptionExtractor
 	xmlToolAdapter       *processor.XmlToolAdapter
+	loopDetector         *processor.LoopDetector
 	start                *processor.Start
 	end                  *processor.End
 
@@ -163,6 +164,7 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 		p.agentName,
 		p.promptMode,
 	)
+	p.loopDetector = processor.NewLoopDetector()
 	// p.userCompressor = processor.NewUserCompressor(
 	// 	p.ctx,
 	// 	p.config,
@@ -176,7 +178,8 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 	p.taskContentProcessor.SetNext(p.xmlToolAdapter)
 	// p.xmlToolAdapter.SetNext(p.userCompressor)
 	p.xmlToolAdapter.SetNext(p.toolDescExtractor)
-	p.toolDescExtractor.SetNext(p.end)
+	p.toolDescExtractor.SetNext(p.loopDetector)
+	p.loopDetector.SetNext(p.end)
 
 	return nil
 }
