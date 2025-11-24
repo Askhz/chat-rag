@@ -97,7 +97,8 @@ func (l *LoopDetector) addInterventionToUserMessage(promptMsg *PromptMsg) error 
 	// Add intervention content
 	interventionContent := model.Content{
 		Type: model.ContTypeText,
-		Text: "Stop trying repetitive actions and rethink the actions to take. You can use different tools, and if you're unsure of the user's intent or goal, you can ask questions.",
+		// 英文提示词对GLM效果不好
+		Text: "停止重复回答！下一步你必须按照以下步骤执行：1. 重新思考一下应该采取的动作。2. 可以使用不同的工具进行下一步动作，如果不清楚用户的意图或目标，你可以询问。",
 	}
 
 	contents = append(contents, interventionContent)
