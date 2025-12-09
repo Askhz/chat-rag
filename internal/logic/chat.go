@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -110,10 +111,10 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 		Timestamp: startTime,
 		Params: model.RequestParams{
 			Model:               modelName,
-			PromptMode:          string(l.request.ExtraBody.PromptMode),
 			MaxTokens:           l.request.MaxTokens,
 			MaxCompletionTokens: l.request.MaxCompletionTokens,
 			Temperature:         l.request.Temperature,
+			ExtraBody:           l.request.ExtraBody,
 		},
 		Tokens: types.TokenMetrics{
 			Original: types.TokenStats{
@@ -414,6 +415,11 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 			}
 			break
 		}
+
+		// If the error is context canceled, stop trying other models
+		if errors.Is(lastErr, context.Canceled) || errors.Is(l.ctx.Err(), context.Canceled) {
+			break
+		}
 	}
 	return l.handleStreamError(lastErr, chatLog)
 }
@@ -493,12 +499,9 @@ func (l *ChatCompletionLogic) processStream(
 	}()
 
 	err := llmClient.ChatLLMWithMessagesStreamRaw(timerCtx, l.request.LLMRequestParams, idleTimer, func(llmResp client.LLMResponse) error {
-		l.handleResonseHeaders(llmResp.Header, []string{
-			types.HeaderUserInput,
-			types.HeaderSelectLLm,
-		}, chatLog)
+		l.handleResonseHeaders(llmResp.Header, types.ResponseHeadersToForward, chatLog)
 
-		return l.handleStreamChunk(ctx, flusher, llmResp.ResonseLine, state, remainingDepth, chatLog)
+		return l.handleStreamChunk(ctx, flusher, llmResp.ResonseLine, state, remainingDepth, chatLog, idleTimer)
 	})
 
 	return state.toolDetected, err
@@ -531,6 +534,7 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 	state *streamState,
 	remainingDepth int,
 	chatLog *model.ChatLog,
+	idleTimer *timeout.IdleTimer,
 ) error {
 	content, usage, resp := l.responseHandler.extractStreamingData(rawLine)
 	if resp != nil {
@@ -555,6 +559,9 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 		logger.InfoC(ctx, "[first-token] first token received, and response",
 			zap.String("model", l.request.Model), zap.Duration("firstTokenLatency", firstTokenLatency))
 		state.firstToken = false
+
+		// 通知 idleTimer 已接收首token（新增）
+		idleTimer.SetFirstTokenReceived()
 
 		if err := l.sendStreamContent(flusher, state.response, "\n"); err != nil {
 			return err
@@ -746,17 +753,27 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 ) error {
 	logger.InfoC(l.ctx, "starting to send remaining content before ending.")
 
+	// Check if the entire response is invalid by verifying if we received any response data
+	// Also check if the content is only empty (excluding newlines)
+	fullContentStr := state.fullContent.String()
+	trimmedContent := strings.ReplaceAll(fullContentStr, "\n", "")
+
+	if state.response == nil || trimmedContent == "" {
+		logger.WarnC(l.ctx, "detected invalid or empty response")
+
+		// Send error response
+		noContentErr := types.NewInvaildResponseContentError()
+		l.responseHandler.sendSSEError(l.writer, noContentErr)
+		chatLog.AddError(types.ErrApiError, noContentErr)
+		return nil
+	}
+
 	if len(state.window) > 0 {
 		if state.window[len(state.window)-1] == "[DONE]" {
 			state.window = state.window[:len(state.window)-1]
 		}
 
 		endContent := strings.Join(state.window, "")
-
-		if state.response == nil {
-			logger.WarnC(l.ctx, "state.response is nil when sending remaining content")
-			state.response = &types.ChatCompletionResponse{}
-		}
 
 		if l.usage != nil {
 			state.response.Usage = *l.usage
@@ -780,6 +797,12 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 
 // handleStreamError handles streaming errors with appropriate error responses
 func (l *ChatCompletionLogic) handleStreamError(err error, chatLog *model.ChatLog) error {
+	// Check if it's a context cancellation (client disconnect)
+	if errors.Is(err, context.Canceled) || errors.Is(l.ctx.Err(), context.Canceled) {
+		logger.WarnC(l.ctx, "Client disconnected (context canceled)", zap.Error(err))
+		return nil
+	}
+
 	logger.ErrorC(l.ctx, "ChatLLMWithMessagesStreamRaw error", zap.Error(err))
 
 	if l.isContextLengthError(err) {
@@ -973,6 +996,16 @@ func (l *ChatCompletionLogic) callWithDegradation(params types.LLMRequestParams,
 		}
 
 		lastErr = err
+
+		// If the error is context canceled, stop trying other models
+		if errors.Is(err, context.Canceled) || errors.Is(l.ctx.Err(), context.Canceled) {
+			logger.WarnC(l.ctx, "degradation: context canceled, stopping degradation",
+				zap.String("model", modelName),
+				zap.Error(err),
+			)
+			return nilResp, err
+		}
+
 		logger.WarnC(l.ctx, "degradation: model failed, moving to next",
 			zap.String("model", modelName),
 			zap.Error(err),
@@ -984,6 +1017,9 @@ func (l *ChatCompletionLogic) callWithDegradation(params types.LLMRequestParams,
 // isRetryableAPIError returns true when we should retry the same model: timeout/network/5xx
 func isRetryableAPIError(err error) bool {
 	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) {
 		return false
 	}
 	if apiErr, ok := err.(*types.APIError); ok {
@@ -1022,10 +1058,7 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 
 	err := llmClient.ChatLLMWithMessagesStreamRaw(timerCtx, l.request.LLMRequestParams, idleTimer, func(llmResp client.LLMResponse) error {
 		// Handle response headers
-		l.handleResonseHeaders(llmResp.Header, []string{
-			types.HeaderUserInput,
-			types.HeaderSelectLLm,
-		}, chatLog)
+		l.handleResonseHeaders(llmResp.Header, types.ResponseHeadersToForward, chatLog)
 
 		// Direct pass through response line to client
 		if llmResp.ResonseLine != "" {
@@ -1037,6 +1070,9 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 				chatLog.Latency.FirstTokenLatency = firstTokenLatency.Milliseconds()
 				logger.InfoC(ctx, "[first-token][raw mode] first token received, and response",
 					zap.String("model", l.request.Model), zap.Duration("firstTokenLatency", firstTokenLatency))
+
+				// 通知 idleTimer 已接收首token（新增）
+				idleTimer.SetFirstTokenReceived()
 			}
 
 			if _, err := fmt.Fprintf(l.writer, "%s\n", llmResp.ResonseLine); err != nil {

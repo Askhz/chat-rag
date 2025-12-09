@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -56,6 +57,7 @@ Example summary structure:
 
 Output only the summary of the conversation so far, without any additional commentary or explanation.`
 
+// Deprecated
 type UserCompressor struct {
 	Recorder
 	ctx          context.Context
@@ -121,10 +123,17 @@ func (u *UserCompressor) Execute(promptMsg *PromptMsg) {
 
 	summary, err := u.compressMessages(messagesToSummarize)
 	if err != nil {
-		logger.Error("failed to compress messages",
-			zap.Error(err),
-			zap.String("method", method),
-		)
+		if errors.Is(err, context.Canceled) || errors.Is(u.ctx.Err(), context.Canceled) {
+			logger.Warn("Context canceled during message compression",
+				zap.Error(err),
+				zap.String("method", method),
+			)
+		} else {
+			logger.Error("failed to compress messages",
+				zap.Error(err),
+				zap.String("method", method),
+			)
+		}
 		u.Err = err
 		u.passToNext(promptMsg)
 		return
