@@ -10,6 +10,17 @@ build:
 build-win:
 	go build -o bin/chat-rag.exe main.go
 
+# Build for Linux AMD64
+build-linux-amd64:
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/chat-rag-linux-amd64 main.go
+
+# Build for Linux ARM64
+build-linux-arm64:
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o bin/chat-rag-linux-arm64 main.go
+
+# Build for all Linux platforms
+build-linux: build-linux-amd64 build-linux-arm64
+
 # Run the application
 run:
 	go run main.go -f etc/chat-api.yaml

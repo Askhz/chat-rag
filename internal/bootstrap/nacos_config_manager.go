@@ -74,7 +74,7 @@ func (m *NacosConfigManager) InitializeNacosConfig() (*NacosConfigResult, error)
 	metadataList := getNacosConfigMetadata()
 	result, err := m.loadAllConfigurations(metadataList)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to load Nacos configurations: %v", err))
+		// panic(fmt.Sprintf("Failed to load Nacos configurations: %v", err))
 	}
 
 	logger.Info("Nacos configuration initialization completed successfully")

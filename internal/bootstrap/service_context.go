@@ -181,23 +181,23 @@ func (svc *ServiceContext) initializeNacosConfig() error {
 	}
 
 	// Assign configuration results with pointer checks
-	if nacosResult.RulesConfig == nil {
-		return fmt.Errorf("nacos rules configuration is nil")
-	}
-	if nacosResult.ToolsConfig == nil {
-		return fmt.Errorf("nacos tools configuration is nil")
-	}
-	if nacosResult.PreciseContextConfig == nil {
-		return fmt.Errorf("nacos precise context configuration is nil")
-	}
-	if nacosResult.RouterConfig == nil {
-		return fmt.Errorf("nacos router configuration is nil")
-	}
+	// if nacosResult.RulesConfig == nil {
+	// 	return fmt.Errorf("nacos rules configuration is nil")
+	// }
+	// if nacosResult.ToolsConfig == nil {
+	// 	return fmt.Errorf("nacos tools configuration is nil")
+	// }
+	// if nacosResult.PreciseContextConfig == nil {
+	// 	return fmt.Errorf("nacos precise context configuration is nil")
+	// }
+	// if nacosResult.RouterConfig == nil {
+	// 	return fmt.Errorf("nacos router configuration is nil")
+	// }
 
-	svc.Config.Rules = nacosResult.RulesConfig
-	svc.Config.Tools = nacosResult.ToolsConfig
-	svc.Config.PreciseContextConfig = nacosResult.PreciseContextConfig
-	svc.Config.Router = nacosResult.RouterConfig
+	// svc.Config.Rules = nacosResult.RulesConfig
+	// svc.Config.Tools = nacosResult.ToolsConfig
+	// svc.Config.PreciseContextConfig = nacosResult.PreciseContextConfig
+	// svc.Config.Router = nacosResult.RouterConfig
 
 	// Apply router defaults after loading from Nacos
 	config.ApplyRouterDefaults(&svc.Config)
