@@ -92,7 +92,8 @@ func SendSSEResponseMessage(c *gin.Context, clientIDE string, templateString str
 				{
 					Index: 0,
 					Delta: types.Delta{
-						Role: "assistant",
+						Role:             "assistant",
+						ReasoningContent: "hello",
 						ToolCalls: []any{
 							map[string]interface{}{
 								"id":   randomID,

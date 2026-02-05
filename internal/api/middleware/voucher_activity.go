@@ -121,37 +121,37 @@ func VoucherActivityMiddleware(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc
 
 		// 8. Check if user has already redeemed
 		usersKey := fmt.Sprintf("voucher:activity:%s:users", matchedActivity.Keyword)
-		redeemedRecord, err := svcCtx.RedisClient.GetHashField(ctx, usersKey, userID)
-		if err != nil {
-			logger.WarnC(ctx, "Failed to get user redemption status from Redis", zap.Error(err))
-		}
-		if err == nil && redeemedRecord != "" {
-			logger.InfoC(ctx, "User has already redeemed this activity", zap.String("user", identity.UserName))
-			helper.SendSSEResponseMessage(c, identity.ClientIDE, matchedActivity.AlreadyRedeemedMessage, map[string]interface{}{
-				"Config":      matchedActivity,
-				"CurrentTime": currentTime,
-			})
-			c.Abort()
-			return
-		}
+		// redeemedRecord, err := svcCtx.RedisClient.GetHashField(ctx, usersKey, userID)
+		// if err != nil {
+		// 	logger.WarnC(ctx, "Failed to get user redemption status from Redis", zap.Error(err))
+		// }
+		// if err == nil && redeemedRecord != "" {
+		// 	logger.InfoC(ctx, "User has already redeemed this activity", zap.String("user", identity.UserName))
+		// 	helper.SendSSEResponseMessage(c, identity.ClientIDE, matchedActivity.AlreadyRedeemedMessage, map[string]interface{}{
+		// 		"Config":      matchedActivity,
+		// 		"CurrentTime": currentTime,
+		// 	})
+		// 	c.Abort()
+		// 	return
+		// }
 
 		// 9. Check activity quota using HashLen
-		userCount, err := svcCtx.RedisClient.HashLen(ctx, usersKey)
-		if err != nil {
-			logger.WarnC(ctx, "Failed to get user count from Redis", zap.Error(err))
-			userCount = 0
-		}
+		// userCount, err := svcCtx.RedisClient.HashLen(ctx, usersKey)
+		// if err != nil {
+		// 	logger.WarnC(ctx, "Failed to get user count from Redis", zap.Error(err))
+		// 	userCount = 0
+		// }
 
-		logger.InfoC(ctx, "Got users from resdis", zap.Int64("userCount", userCount),
-			zap.Int("TotalQuota", matchedActivity.TotalQuota))
-		if userCount >= int64(matchedActivity.TotalQuota) {
-			helper.SendSSEResponseMessage(c, identity.ClientIDE, matchedActivity.QuotaExhaustedMessage, map[string]interface{}{
-				"Config":      matchedActivity,
-				"CurrentTime": currentTime,
-			})
-			c.Abort()
-			return
-		}
+		// logger.InfoC(ctx, "Got users from resdis", zap.Int64("userCount", userCount),
+		// 	zap.Int("TotalQuota", matchedActivity.TotalQuota))
+		// if userCount >= int64(matchedActivity.TotalQuota) {
+		// 	helper.SendSSEResponseMessage(c, identity.ClientIDE, matchedActivity.QuotaExhaustedMessage, map[string]interface{}{
+		// 		"Config":      matchedActivity,
+		// 		"CurrentTime": currentTime,
+		// 	})
+		// 	c.Abort()
+		// 	return
+		// }
 
 		// 10. Generate voucher code
 		voucherData := &service.VoucherData{
