@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"text/template"
 	"time"
 
@@ -52,10 +53,13 @@ func SendErrorResponse(c *gin.Context, statusCode int, err error) {
 func SendSSEResponseMessage(c *gin.Context, clientIDE string, templateString string, templateData map[string]interface{}) {
 	SetSSEResponseHeaders(c)
 	c.Status(http.StatusOK)
+	logger.InfoC(c, "sending sse response message", zap.String("client_ide", clientIDE))
 
+	const vscode = "Visual Studio Code"
 	// Parse and execute template
-	if clientIDE == "vscode" {
-		templateString = fmt.Sprintf("{\"result\": \"%s\"}", templateString)
+	if clientIDE == vscode {
+		templateString = fmt.Sprintf("{\"result\": \"%s\"}",
+			strings.ReplaceAll(templateString, "\n", "\\n"))
 	}
 	tmpl, err := template.New("sse").Parse(templateString)
 
@@ -81,8 +85,8 @@ func SendSSEResponseMessage(c *gin.Context, clientIDE string, templateString str
 
 	randomID := generateRandomID()
 
-	var response types.ChatCompletionResponse
-	if clientIDE == "vscode" {
+	var response interface{}
+	if clientIDE == vscode {
 		response = types.ChatCompletionResponse{
 			Id:      randomID,
 			Object:  "chat.completion.chunk",
@@ -93,11 +97,12 @@ func SendSSEResponseMessage(c *gin.Context, clientIDE string, templateString str
 					Index: 0,
 					Delta: types.Delta{
 						Role:             "assistant",
-						ReasoningContent: "hello",
+						ReasoningContent: "",
 						ToolCalls: []any{
 							map[string]interface{}{
-								"id":   randomID,
-								"type": "function",
+								"index": 0,
+								"id":    randomID,
+								"type":  "function",
 								"function": map[string]interface{}{
 									"name":      "attempt_completion",
 									"arguments": responseData,
@@ -109,20 +114,25 @@ func SendSSEResponseMessage(c *gin.Context, clientIDE string, templateString str
 			},
 		}
 	} else {
-		response = types.ChatCompletionResponse{
-			Id:      randomID,
-			Object:  "chat.completion",
-			Created: time.Now().Unix(),
-			Model:   "",
-			Choices: []types.Choice{
-				{
-					Index: 0,
-					Delta: types.Delta{
-						Role:    "assistant",
-						Content: responseData,
+		response = map[string]interface{}{
+			"id":      randomID,
+			"object":  "chat.completion.chunk",
+			"created": time.Now().Unix(),
+			"model":   "",
+			"choices": []interface{}{
+				map[string]interface{}{
+					"index": 0,
+					"delta": map[string]interface{}{
+						"role":              "assistant",
+						"content":           responseData,
+						"reasoning_content": "",
+						"tool_calls":        nil,
 					},
+					"logprobs":      nil,
+					"finish_reason": "stop",
 				},
 			},
+			"usage": nil,
 		}
 	}
 

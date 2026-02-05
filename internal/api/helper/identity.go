@@ -12,10 +12,10 @@ import (
 
 // GetIdentityFromHeaders extracts request headers and creates Identity struct
 func GetIdentityFromHeaders(c *gin.Context) *model.Identity {
-	clientIDE := getHeaderWithDefault(c, types.HeaderClientIde, "vscode")
 	caller := getHeaderWithDefault(c, types.HeaderCaller, "chat")
 	sender := getHeaderWithDefault(c, types.HeaderQuotaIdentity, "system")
 
+	clientIDE := c.GetHeader(types.HeaderClientIde)
 	projectPath := c.GetHeader(types.HeaderProjectPath)
 	if decodedPath, err := url.PathUnescape(projectPath); err != nil {
 		logger.Error("Failed to PathUnescape project path",
