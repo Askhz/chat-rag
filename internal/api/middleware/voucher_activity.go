@@ -67,6 +67,16 @@ func VoucherActivityMiddleware(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc
 			return
 		}
 
+		// Excluding cases where CLI automatically retrieves the title
+		if len(req.Messages) == 3 {
+			secondMessage := fmt.Sprintf("%v", req.Messages[1].Content)
+			if strings.Contains(secondMessage, "Generate a title for this conversation") {
+				logger.InfoC(ctx, "Cli generating titile request, skip")
+				c.Next()
+				return
+			}
+		}
+
 		lastMessage := req.Messages[len(req.Messages)-1]
 		userMessage := fmt.Sprintf("%v", lastMessage.Content)
 
