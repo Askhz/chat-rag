@@ -2,6 +2,8 @@ package helper
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -71,76 +73,72 @@ func SendSSEResponseMessage(c *gin.Context, clientIDE string, templateString str
 		}
 	}
 
-	runes := []rune(responseData)
-	flusher, ok := c.Writer.(http.Flusher)
+	generateRandomID := func() string {
+		b := make([]byte, 16)
+		rand.Read(b)
+		return hex.EncodeToString(b)
+	}
 
-	for i := 0; i < len(runes); i += 2 {
-		chunkSize := 2
-		if i+chunkSize > len(runes) {
-			chunkSize = len(runes) - i
-		}
-		chunk := string(runes[i : i+chunkSize])
+	randomID := generateRandomID()
 
-		var response types.ChatCompletionResponse
-		if clientIDE == "vscode" {
-			response = types.ChatCompletionResponse{
-				Id:      "5bf03b8ccd1a4824bffbf36be0a44a78",
-				Object:  "chat.completion.chunk",
-				Created: time.Now().Unix(),
-				Model:   "",
-				Choices: []types.Choice{
-					{
-						Index: 0,
-						Delta: types.Delta{
-							Role: "assistant",
-							ToolCalls: []any{
-								map[string]interface{}{
-									"id":   "5bf03b8ccd1a4824bffbf36be0a44a78",
-									"type": "function",
-									"function": map[string]interface{}{
-										"name":      "attempt_completion",
-										"arguments": chunk,
-									},
+	var response types.ChatCompletionResponse
+	if clientIDE == "vscode" {
+		response = types.ChatCompletionResponse{
+			Id:      randomID,
+			Object:  "chat.completion.chunk",
+			Created: time.Now().Unix(),
+			Model:   "",
+			Choices: []types.Choice{
+				{
+					Index: 0,
+					Delta: types.Delta{
+						Role: "assistant",
+						ToolCalls: []any{
+							map[string]interface{}{
+								"id":   randomID,
+								"type": "function",
+								"function": map[string]interface{}{
+									"name":      "attempt_completion",
+									"arguments": responseData,
 								},
 							},
 						},
 					},
 				},
-			}
-		} else {
-			response = types.ChatCompletionResponse{
-				Id:      "",
-				Object:  "chat.completion",
-				Created: time.Now().Unix(),
-				Model:   "",
-				Choices: []types.Choice{
-					{
-						Index: 0,
-						Delta: types.Delta{
-							Role:    "assistant",
-							Content: chunk,
-						},
+			},
+		}
+	} else {
+		response = types.ChatCompletionResponse{
+			Id:      randomID,
+			Object:  "chat.completion",
+			Created: time.Now().Unix(),
+			Model:   "",
+			Choices: []types.Choice{
+				{
+					Index: 0,
+					Delta: types.Delta{
+						Role:    "assistant",
+						Content: responseData,
 					},
 				},
-			}
+			},
 		}
+	}
 
-		jsonData, err := json.Marshal(response)
-		if err != nil {
-			logger.Error("Failed to marshal ChatCompletionResponse", zap.Error(err))
-			_, err = fmt.Fprintf(c.Writer, "data: %s\n\n", chunk)
-		} else {
-			_, err = fmt.Fprintf(c.Writer, "data: %s\n\n", jsonData)
-		}
-		if err != nil {
-			logger.Error("Failed to write SSE response", zap.Error(err))
-		}
+	jsonData, err := json.Marshal(response)
+	if err != nil {
+		logger.Error("Failed to marshal ChatCompletionResponse", zap.Error(err))
+		_, err = fmt.Fprintf(c.Writer, "data: %s\n\n", responseData)
+	} else {
+		_, err = fmt.Fprintf(c.Writer, "data: %s\n\n", jsonData)
+	}
+	if err != nil {
+		logger.Error("Failed to write SSE response", zap.Error(err))
+	}
 
-		if ok {
-			flusher.Flush()
-		}
-
-		time.Sleep(10 * time.Millisecond)
+	flusher, ok := c.Writer.(http.Flusher)
+	if ok {
+		flusher.Flush()
 	}
 
 	c.Writer.Write([]byte("data: [DONE]\n\n"))

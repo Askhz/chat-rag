@@ -96,7 +96,13 @@ func VoucherActivityMiddleware(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc
 
 		// 6. Check activity time validity
 		currentTime := time.Now()
-		if currentTime.Before(matchedActivity.StartTime) || currentTime.After(matchedActivity.EndTime) {
+		if currentTime.Before(matchedActivity.StartTime) {
+			logger.WarnC(ctx, "Activity not started yet")
+			c.Next()
+			return
+		}
+		if currentTime.After(matchedActivity.EndTime) {
+			logger.InfoC(ctx, "Activity has ended")
 			helper.SendSSEResponseMessage(c, identity.ClientIDE, matchedActivity.ExpiredMessage, map[string]interface{}{
 				"Config":      matchedActivity,
 				"CurrentTime": currentTime,
@@ -120,6 +126,7 @@ func VoucherActivityMiddleware(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc
 			logger.WarnC(ctx, "Failed to get user redemption status from Redis", zap.Error(err))
 		}
 		if err == nil && redeemedRecord != "" {
+			logger.InfoC(ctx, "User has already redeemed this activity", zap.String("user", identity.UserName))
 			helper.SendSSEResponseMessage(c, identity.ClientIDE, matchedActivity.AlreadyRedeemedMessage, map[string]interface{}{
 				"Config":      matchedActivity,
 				"CurrentTime": currentTime,
