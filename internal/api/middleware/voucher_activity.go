@@ -68,13 +68,7 @@ func VoucherActivityMiddleware(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc
 		}
 
 		lastMessage := req.Messages[len(req.Messages)-1]
-
-		userMessage, ok := lastMessage.Content.(string)
-		if !ok {
-			logger.WarnC(ctx, "Last message content is not a string")
-			c.Next()
-			return
-		}
+		userMessage := fmt.Sprintf("%v", lastMessage.Content)
 
 		// 5. Find matching activity
 		var matchedActivity *config.VoucherActivity
