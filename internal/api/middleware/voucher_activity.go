@@ -154,8 +154,9 @@ func VoucherActivityMiddleware(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc
 
 		// 10. Generate voucher code
 		voucherData := &service.VoucherData{
-			GiverID:   identity.UserInfo.UUID,
-			GiverName: identity.UserInfo.Name,
+			GiverID:    fmt.Sprintf("《%s》活动", matchedActivity.Keyword),
+			GiverName:  "admin",
+			ReceiverID: identity.UserInfo.UUID,
 			QuotaList: []service.VoucherQuotaItem{
 				{
 					Amount:     matchedActivity.CreditAmount,

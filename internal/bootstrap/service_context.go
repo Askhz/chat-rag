@@ -441,5 +441,6 @@ func (svc *ServiceContext) updateVoucherActivityConfig(newConfig *config.Voucher
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
 	svc.Config.VoucherActivityConfig = newConfig
+	svc.initializeVoucherService()
 	logger.Info("Voucher activity configuration updated")
 }
