@@ -130,9 +130,14 @@ func VoucherActivityMiddleware(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc
 		}
 		if err == nil && redeemedRecord != "" {
 			logger.InfoC(ctx, "User has already redeemed this activity", zap.String("user", identity.UserName))
+			var record config.VoucherRedemptionRecord
+			if err := json.Unmarshal([]byte(redeemedRecord), &record); err != nil {
+				logger.WarnC(ctx, "Failed to unmarshal redemption record", zap.Error(err))
+			}
 			helper.SendSSEResponseMessage(c, identity.ClientIDE, matchedActivity.AlreadyRedeemedMessage, map[string]interface{}{
 				"Config":      matchedActivity,
 				"CurrentTime": currentTime,
+				"VoucherCode": record.VoucherCode,
 			})
 			c.Abort()
 			return
